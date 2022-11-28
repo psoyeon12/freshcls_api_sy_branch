@@ -1,9 +1,10 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
+import requests
 from flask_cors import CORS
 import numpy as np
 import cv2
 import db_connector
-
+import json
 import ssl
 
 app = Flask(__name__, template_folder='web')
@@ -111,21 +112,15 @@ def selectAsDict(self, query):
 
     return results
 
-def on_json_loading_failed_return_dict(e):
-    return {}
-
-
-
 @app.route('/login', methods=['POST'])
 def login():
-
-    request.on_json_loading_failed = on_json_loading_failed_return_dict
     # DB에서 api 형태로 query 정보를 받아오는 코드
 
-    query = "SELECT * FROM auth WHERE 1=1 "
+    query = "SELECT * FROM login WHERE 1=1 "
     dbConn = db_connector.DbConn()
     login_data = dbConn.select(query=query)
     login_lst = []
+    print(login_data)
 
     for data in login_data:
         login_dict = dict(zip(['id', 'password', 'login_no', 'act_yn'],data))
@@ -134,32 +129,42 @@ def login():
     # Flutter에서 해당 url로 email과 password를 post한 내용을 받아오는 코드
 
         # request 방식 확인 코드
-    print(request.is_json)
-    params = request.get_json()
 
-
+    email = request.form.get('id')
+    pwd = request.form.get('password')
+    params = [email, pwd]
+    print(params)
+    param_dict = dict(zip(['id', 'password'], params))
 
     # Flutter에서 받아온 정보를 DB에서 받아온 정보와 비교하여 POST할 dict를 작성하는 코드
 
-    # for dicta in login_lst:
-    #     if dicta['id'] == param_dict['id']:
-    #         dicta['act_yn'] = 'Y'
-    #         dicta['auth_result'] = 'ok'
-    #     elif dicta['password'] == param_dict['password']:
-    #
-    #     else:
-    #         dicta['auth_yn'] = 'N'
-    #         dicta['auth_result'] = 'fail'
-    #
-    # if len(auth_lst) > 0:
-    #     auth_result = 'ok'
-    # else:
-    #     auth_result = 'fail'
+    # flutter에 전송할 dictionary
+    # 형태는 {id, password, act_yn, login_no, id_right, pw_right, act_real}
+    dict_result = {}
+
+    for dicta in login_lst:
+        if dicta['id'] == param_dict['id']:
+            dict_result['act_yn'] = dicta['act_yn']
+            dict_result['login_no'] = dicta['login_no']
+            dict_result['id'] = param_dict['id']
+            dict_result['password'] = param_dict['password']
+            if dicta['act_yn'] == 'Y':
+                dict_result['act_real'] = 'This account is activated'
+            else:
+                dict_result['act_real'] = 'This account is not activated'
+            dict_result['id_right'] = 'Y'
+            if dicta['password'] == param_dict['password']:
+                dict_result['pw_right'] = 'Y'
+            else:
+                dict_result['pw_right'] = 'N'
+        else:
+            pass
+    print(dict_result)
 
     # 비교 후 작성된 dict 내용을 json 혹은 ajax 형태로 flutter에 전송하기 위한 코드
 
-    return jsonify({'result': params})
-    # return jsonify({'result': auth_lst, 'authorization_result' : auth_result})
+    # res = requests.post("https://192.168.0.108:2092/login", data = json.dumps(dict_result), verify = False)
+    return jsonify(dict_result)
 
 @app.route('/log', methods=['GET', 'POST'])
 def log():
@@ -171,5 +176,5 @@ def log():
 if __name__ == "__main__":
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
     ssl_context.load_cert_chain(certfile='server.crt', keyfile='server.key', password='1234')
-    app.run(host='0.0.0.0', port=9890, ssl_context=ssl_context, debug=True)
+    app.run(host='0.0.0.0', port=2092, ssl_context=ssl_context, debug=True)
 
