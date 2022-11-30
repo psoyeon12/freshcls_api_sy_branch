@@ -114,51 +114,71 @@ def selectAsDict(self, query):
 
 @app.route('/login', methods=['POST'])
 def login():
-    # DB에서 api 형태로 query 정보를 받아오는 코드
-
-    query = "SELECT * FROM login WHERE 1=1 "
-    dbConn = db_connector.DbConn()
-    login_data = dbConn.select(query=query)
-    login_lst = []
-    print(login_data)
-
-    for data in login_data:
-        login_dict = dict(zip(['id', 'password', 'login_no', 'act_yn'],data))
-        login_lst.append(login_dict)
 
     # Flutter에서 해당 url로 email과 password를 post한 내용을 받아오는 코드
 
         # request 방식 확인 코드
 
-    email = request.form.get('id')
+    id = str(request.form.get('id'))
     pwd = request.form.get('password')
-    params = [email, pwd]
+    params = [id, pwd]
     print(params)
     param_dict = dict(zip(['id', 'password'], params))
+
+    # DB에서 api 형태로 query 정보를 받아오는 코드
+
+    query = f"SELECT * FROM login WHERE id = '{id}';"
+    dbConn = db_connector.DbConn()
+    login_data = dbConn.select(query=query)
+    print(login_data)
+    if len(login_data) > 0:
+        login_dict = dict(zip(['id', 'password', 'login_no', 'act_yn', 'str_no'],login_data[0]))
+        print(login_dict)
+        id_s = 1
+    else:
+        id_s = 0
+
 
     # Flutter에서 받아온 정보를 DB에서 받아온 정보와 비교하여 POST할 dict를 작성하는 코드
 
     # flutter에 전송할 dictionary
-    # 형태는 {id, password, act_yn, login_no, id_right, pw_right, act_real}
+    # 형태는 {act_yn, login_no, str_no, log_in_state, log_in_text}
+    '''
+        act_yn = 'Y' / 'N'
+        login_no = 해당 로그인 정보
+        str_no = 매장 정보
+        log_in_st = 0 : 로그인 성공 + 인증 Y, 1 : 로그인 성공 + 인증 N, 2 : ID 오류, 3 : PW 오류(ID는 맞으나 PW 틀림)
+        log_in_text = 0 : '로그인 및 인증을 모두 성공했습니다.' , 1 : '인증이 되지 않은 로그인 정보입니다.', 2 : 'ID가 틀렸습니다.', 3 : 'PW가 틀렸습니다.' 
+    '''
     dict_result = {}
+    dict_text = {0 : '로그인 및 인증을 모두 성공했습니다.', 1 : '인증이 되지 않은 로그인 정보입니다.', 2 : 'ID가 틀렸습니다.', 3 : 'PW가 틀렸습니다.', 4 : '인증 오류 발생'}
+    log_in_st = 4
 
-    for dicta in login_lst:
-        if dicta['id'] == param_dict['id']:
-            dict_result['act_yn'] = dicta['act_yn']
-            dict_result['login_no'] = dicta['login_no']
-            dict_result['id'] = param_dict['id']
-            dict_result['password'] = param_dict['password']
-            if dicta['act_yn'] == 'Y':
-                dict_result['act_real'] = 'This account is activated'
+    if id_s == 1:
+        dict_result['log_in_st'] = log_in_st
+        dict_result['str_no'] = login_dict['str_no']
+        dict_result['login_no'] = login_dict['login_no']
+        if login_dict['password'] == param_dict['password']:
+            if login_dict['act_yn'] == 'Y':
+                dict_result['act_yn'] = login_dict['act_yn']
+                log_in_st = 0
+                dict_result['log_in_st'] = log_in_st
+
             else:
-                dict_result['act_real'] = 'This account is not activated'
-            dict_result['id_right'] = 'Y'
-            if dicta['password'] == param_dict['password']:
-                dict_result['pw_right'] = 'Y'
-            else:
-                dict_result['pw_right'] = 'N'
+                dict_result['act_yn'] = login_dict['act_yn']
+                log_in_st = 1
+                dict_result['log_in_st'] = log_in_st
+
         else:
-            pass
+            log_in_st = 3
+            dict_result['log_in_st'] = log_in_st
+
+    else:
+        log_in_st = 2
+        dict_result['log_in_st'] = log_in_st
+
+    dict_result['log_in_text'] = dict_text[log_in_st]
+
     print(dict_result)
 
     # 비교 후 작성된 dict 내용을 json 혹은 ajax 형태로 flutter에 전송하기 위한 코드
